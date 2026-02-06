@@ -69,7 +69,7 @@ const corsOptions: CorsOptions = {
 app.use(cors(corsOptions));
 
 // IMPORTANT: handle preflight ONCE (no duplicates)
-app.options("*", cors(corsOptions));
+app.options(/.*/, cors(corsOptions));
 
 app.use(express.json());
 
