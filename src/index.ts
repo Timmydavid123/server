@@ -44,11 +44,26 @@ const getTransporter = () => {
 };
 
 // Add CORS for frontend URL
-const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
-app.use(cors({ 
-  origin: frontendUrl,
-  credentials: true 
-}));
+const allowedOrigins = [
+  "http://localhost:5173",
+  process.env.FRONTEND_URL, // e.g. https://your-frontend.vercel.app
+].filter(Boolean) as string[];
+
+app.use(
+  cors({
+    origin: (origin, cb) => {
+      // allow requests with no origin (Postman, curl)
+      if (!origin) return cb(null, true);
+      if (allowedOrigins.includes(origin)) return cb(null, true);
+      return cb(new Error(`CORS blocked for origin: ${origin}`));
+    },
+    credentials: true,
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+  })
+);
+
+app.options("*", cors());
 app.use(express.json());
 
 // Define proper TypeScript interfaces
