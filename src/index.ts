@@ -46,22 +46,63 @@ const getTransporter = () => {
 // Add CORS for frontend URL
 const allowedOrigins = [
   "http://localhost:5173",
-  process.env.FRONTEND_URL, // e.g. https://your-frontend.vercel.app
+  "https://adisaolashile.com", // Add your production frontend domain
+  "https://www.adisaolashile.com", // Add www version if needed
+  process.env.FRONTEND_URL,
 ].filter(Boolean) as string[];
 
 app.use(
   cors({
     origin: (origin, cb) => {
-      // allow requests with no origin (Postman, curl)
+      // Allow requests with no origin (like mobile apps, curl, Postman)
       if (!origin) return cb(null, true);
-      if (allowedOrigins.includes(origin)) return cb(null, true);
-      return cb(new Error(`CORS blocked for origin: ${origin}`));
+      
+      // Allow localhost for development
+      if (origin.includes('localhost') || origin.includes('127.0.0.1')) {
+        return cb(null, true);
+      }
+      
+      // Allow your production domains
+      if (
+        origin === 'https://adisaolashile.com' ||
+        origin === 'https://www.adisaolashile.com' ||
+        origin === process.env.FRONTEND_URL
+      ) {
+        return cb(null, true);
+      }
+      
+      // For debugging, log the blocked origin
+      console.log('CORS blocked for origin:', origin);
+      return cb(new Error(`CORS policy: ${origin} not allowed`));
     },
     credentials: true,
-    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization"],
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+    allowedHeaders: [
+      'Content-Type',
+      'Authorization',
+      'X-Requested-With',
+      'Accept',
+      'Origin',
+      'Access-Control-Request-Method',
+      'Access-Control-Request-Headers'
+    ],
+    exposedHeaders: ['Content-Range', 'X-Content-Range'],
+    maxAge: 86400, // 24 hours
   })
 );
+
+// Handle preflight requests globally
+app.options('*', (req, res) => {
+  const origin = req.headers.origin;
+  if (origin && allowedOrigins.includes(origin)) {
+    res.header('Access-Control-Allow-Origin', origin);
+  }
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin');
+  res.header('Access-Control-Allow-Credentials', 'true');
+  res.header('Access-Control-Max-Age', '86400');
+  res.sendStatus(204);
+});
 
 app.options("*", cors());
 app.use(express.json());
