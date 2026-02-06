@@ -620,12 +620,3 @@ if (process.env.NODE_ENV === 'production') {
     res.sendFile(path.join(__dirname, 'dist', 'index.html'));
   });
 }
-
-app.listen(port, () => {
-  console.log(`🚀 Server running on port ${port}`);
-  console.log(`🌐 Frontend URL: ${frontendUrl}`);
-  console.log(`📧 Contact endpoint: POST ${frontendUrl}/api/contact`);
-  console.log(`📧 Email configured for: ${process.env.EMAIL_USER}`);
-  console.log(`📧 SMTP Server: ${process.env.SMTP_HOST}:${process.env.SMTP_PORT}`);
-  console.log(`✅ Test email endpoint: GET ${frontendUrl}/test-email`);
-});
