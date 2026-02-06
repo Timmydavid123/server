@@ -1,5 +1,5 @@
 import express, { type Request, type Response } from "express";
-import cors from 'cors';
+import cors, { type CorsOptions } from "cors";
 import Stripe from 'stripe';
 import nodemailer from 'nodemailer';
 import dotenv from 'dotenv';
@@ -54,25 +54,14 @@ const allowedOrigins = new Set(
 );
 
 const corsOptions: CorsOptions = {
-  origin: (origin, cb) => {
-    // Allow non-browser tools (Postman/curl) where Origin is undefined
+  origin: (origin: string | undefined, cb) => {
     if (!origin) return cb(null, true);
-
-    // Exact match only (recommended)
     if (allowedOrigins.has(origin)) return cb(null, true);
-
-    // If you REALLY want to allow any localhost port during dev:
-    if (origin.startsWith("http://localhost:") || origin.startsWith("http://127.0.0.1:")) {
-      return cb(null, true);
-    }
-
-    console.log("CORS blocked:", origin);
     return cb(new Error(`CORS: ${origin} not allowed`));
   },
   credentials: true,
   methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization"],
-  exposedHeaders: ["Content-Range", "X-Content-Range"],
   maxAge: 86400,
 };
 
