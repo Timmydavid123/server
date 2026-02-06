@@ -43,69 +43,47 @@ const getTransporter = () => {
   return nodemailer.createTransport(config);
 };
 
-// Add CORS for frontend URL
-const allowedOrigins = [
-  "http://localhost:5173",
-  "https://adisaolashile.com", // Add your production frontend domain
-  "https://www.adisaolashile.com", // Add www version if needed
-  process.env.FRONTEND_URL,
-].filter(Boolean) as string[];
-
-app.use(
-  cors({
-    origin: (origin, cb) => {
-      // Allow requests with no origin (like mobile apps, curl, Postman)
-      if (!origin) return cb(null, true);
-      
-      // Allow localhost for development
-      if (origin.includes('localhost') || origin.includes('127.0.0.1')) {
-        return cb(null, true);
-      }
-      
-      // Allow your production domains
-      if (
-        origin === 'https://adisaolashile.com' ||
-        origin === 'https://www.adisaolashile.com' ||
-        origin === process.env.FRONTEND_URL
-      ) {
-        return cb(null, true);
-      }
-      
-      // For debugging, log the blocked origin
-      console.log('CORS blocked for origin:', origin);
-      return cb(new Error(`CORS policy: ${origin} not allowed`));
-    },
-    credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
-    allowedHeaders: [
-      'Content-Type',
-      'Authorization',
-      'X-Requested-With',
-      'Accept',
-      'Origin',
-      'Access-Control-Request-Method',
-      'Access-Control-Request-Headers'
-    ],
-    exposedHeaders: ['Content-Range', 'X-Content-Range'],
-    maxAge: 86400, // 24 hours
-  })
+// Build allowed origins (only exact origins)
+const allowedOrigins = new Set(
+  [
+    "http://localhost:5173",
+    "https://adisaolashile.com",
+    "https://www.adisaolashile.com",
+    process.env.FRONTEND_URL, 
+  ].filter(Boolean) as string[]
 );
 
-// Handle preflight requests globally
-app.options('*', (req, res) => {
-  const origin = req.headers.origin;
-  if (origin && allowedOrigins.includes(origin)) {
-    res.header('Access-Control-Allow-Origin', origin);
-  }
-  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
-  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin');
-  res.header('Access-Control-Allow-Credentials', 'true');
-  res.header('Access-Control-Max-Age', '86400');
-  res.sendStatus(204);
-});
+const corsOptions: CorsOptions = {
+  origin: (origin, cb) => {
+    // Allow non-browser tools (Postman/curl) where Origin is undefined
+    if (!origin) return cb(null, true);
 
-app.options("*", cors());
+    // Exact match only (recommended)
+    if (allowedOrigins.has(origin)) return cb(null, true);
+
+    // If you REALLY want to allow any localhost port during dev:
+    if (origin.startsWith("http://localhost:") || origin.startsWith("http://127.0.0.1:")) {
+      return cb(null, true);
+    }
+
+    console.log("CORS blocked:", origin);
+    return cb(new Error(`CORS: ${origin} not allowed`));
+  },
+  credentials: true,
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"],
+  exposedHeaders: ["Content-Range", "X-Content-Range"],
+  maxAge: 86400,
+};
+
+// Handle preflight requests globally
+app.use(cors(corsOptions));
+
+// IMPORTANT: handle preflight ONCE (no duplicates)
+app.options("*", cors(corsOptions));
+
 app.use(express.json());
+
 
 // Define proper TypeScript interfaces
 interface CartItem {
