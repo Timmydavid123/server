@@ -1,7 +1,7 @@
 {
   "name": "server",
   "version": "1.0.0",
-  "main": "dist/index.js",
+  "main": "index.ts",
   "scripts": {
     "dev": "nodemon src/index.ts",
     "build": "tsc",

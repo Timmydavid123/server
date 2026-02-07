@@ -22,7 +22,7 @@ const getTransporter = () => {
   const config = {
     host: process.env.SMTP_HOST || 'adisaolashile.com',
     port: parseInt(process.env.SMTP_PORT || '465'),
-    secure: process.env.SMTP_SECURE === 'true' || true, // Use SSL for port 465
+    secure: process.env.SMTP_SECURE === 'true', // Use SSL for port 465
     auth: {
       user: process.env.EMAIL_USER,
       pass: process.env.EMAIL_PASS,
@@ -54,15 +54,12 @@ const allowedOrigins = new Set(
 );
 
 const corsOptions: CorsOptions = {
-  origin: (origin: string | undefined, cb) => {
+  origin: (origin, cb) => {
     if (!origin) return cb(null, true);
     if (allowedOrigins.has(origin)) return cb(null, true);
     return cb(new Error(`CORS: ${origin} not allowed`));
   },
-  credentials: true,
-  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization"],
-  maxAge: 86400,
+  credentials: false,
 };
 
 // Handle preflight requests globally
@@ -616,7 +613,7 @@ if (process.env.NODE_ENV === 'production') {
   const __dirname = path.resolve();
   app.use(express.static(path.join(__dirname, 'dist')));
   
-  app.get('*', (req, res) => {
-    res.sendFile(path.join(__dirname, 'dist', 'index.html'));
-  });
+  app.get(/.*/, (req, res) => {
+  res.sendFile(path.join(__dirname, 'dist', 'index.html'));
+});
 }
