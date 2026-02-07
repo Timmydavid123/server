@@ -50,31 +50,96 @@ const getTransporter = () => {
   return nodemailer.createTransport(config);
 };
 
-// Build allowed origins (only exact origins)
-const allowedOrigins = new Set(
-  [
-    "http://localhost:5173",
-    "https://adisaolashile.com",
-    "https://www.adisaolashile.com",
-    process.env.FRONTEND_URL, 
-  ].filter(Boolean) as string[]
-);
+// Build allowed origins
+const allowedOrigins = [
+  "http://localhost:5173",
+  "http://localhost:5174", // Add this for development
+  "https://adisaolashile.com",
+  "https://www.adisaolashile.com",
+  process.env.FRONTEND_URL, 
+].filter(Boolean) as string[];
 
+console.log('Allowed origins:', allowedOrigins);
+
+// ========== FIXED CORS CONFIGURATION ==========
 const corsOptions: CorsOptions = {
-  origin: (origin, cb) => {
-    if (!origin) return cb(null, true);
-    if (allowedOrigins.has(origin)) return cb(null, true);
+  origin: (origin, callback) => {
+    // Allow requests with no origin (like mobile apps, curl, postman)
+    if (!origin) {
+      console.log('No origin - allowing request');
+      return callback(null, true);
+    }
+    
+    // Check if the origin is in the allowed list
+    if (allowedOrigins.indexOf(origin) !== -1) {
+      console.log(`CORS allowed for origin: ${origin}`);
+      return callback(null, true);
+    }
+    
+    // Check for subdomains or similar domains
+    if (origin.endsWith('.adisaolashile.com')) {
+      console.log(`CORS allowed for subdomain: ${origin}`);
+      return callback(null, true);
+    }
+    
     console.log(`CORS blocked: ${origin}`);
-    return cb(new Error(`CORS: ${origin} not allowed`));
+    return callback(new Error('Not allowed by CORS'));
   },
   credentials: false,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+  allowedHeaders: [
+    'Content-Type', 
+    'Authorization', 
+    'X-Requested-With',
+    'Accept',
+    'Origin',
+    'Access-Control-Request-Method',
+    'Access-Control-Request-Headers'
+  ],
+  exposedHeaders: [
+    'Access-Control-Allow-Origin',
+    'Access-Control-Allow-Credentials'
+  ],
+  maxAge: 86400, // 24 hours
 };
 
-// Handle preflight requests globally
+// Apply CORS middleware BEFORE any routes
 app.use(cors(corsOptions));
 
-// IMPORTANT: handle preflight ONCE (no duplicates)
-app.options('*', cors(corsOptions));
+// Handle preflight requests explicitly
+app.options('*', (req, res) => {
+  const origin = req.headers.origin;
+  
+  // Set CORS headers
+  if (origin && allowedOrigins.includes(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+  }
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin');
+  res.setHeader('Access-Control-Max-Age', '86400');
+  
+  console.log(`Preflight request handled for: ${origin || 'no origin'}`);
+  res.status(204).end(); // No content for OPTIONS
+});
+
+// Add manual CORS headers for all responses
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  
+  if (origin && allowedOrigins.includes(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+  }
+  res.setHeader('Access-Control-Allow-Credentials', 'false');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin');
+  
+  // For preflight requests, respond immediately
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
+  
+  next();
+});
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -112,8 +177,20 @@ interface ContactFormRequest {
   message: string;
 }
 
+// Test CORS endpoint
+app.get('/test-cors', (req: Request, res: Response) => {
+  console.log('Test CORS endpoint hit');
+  res.json({
+    success: true,
+    message: 'CORS is working!',
+    timestamp: new Date().toISOString(),
+    origin: req.headers.origin || 'No origin header'
+  });
+});
+
 // ========== CONTACT FORM ENDPOINT ==========
 app.post('/api/contact', async (req: Request<object, object, ContactFormRequest>, res: Response) => {
+  console.log('Contact form endpoint hit from:', req.headers.origin);
   try {
     const { name, email, subject, message } = req.body;
 
@@ -348,6 +425,7 @@ Contemporary African Artist
 
 // ========== EXISTING STRIPE ENDPOINTS ==========
 app.post('/create-checkout-session', async (req: Request<object, object, CreateCheckoutSessionRequest>, res: Response) => {
+  console.log('Stripe checkout endpoint hit from:', req.headers.origin);
   try {
     const { items, customerEmail, successUrl, cancelUrl, currency, currencyMultiplier } = req.body;
 
@@ -402,6 +480,7 @@ app.post('/create-checkout-session', async (req: Request<object, object, CreateC
       }
     });
 
+    console.log('Stripe session created:', session.id);
     res.json({ id: session.id, url: session.url });
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
@@ -411,6 +490,7 @@ app.post('/create-checkout-session', async (req: Request<object, object, CreateC
 });
 
 app.get('/verify-payment', async (req: Request, res: Response) => {
+  console.log('Verify payment endpoint hit from:', req.headers.origin);
   try {
     const { session_id } = req.query;
 
@@ -437,6 +517,7 @@ app.get('/verify-payment', async (req: Request, res: Response) => {
 });
 
 app.post('/send-receipt', async (req: Request<object, object, SendReceiptRequest>, res: Response) => {
+  console.log('Send receipt endpoint hit from:', req.headers.origin);
   try {
     const { customerEmail, orderId, items, total, customerName, shippingAddress } = req.body;
 
@@ -567,15 +648,18 @@ app.post('/send-receipt', async (req: Request<object, object, SendReceiptRequest
 
 // Health check endpoint
 app.get('/health', (req: Request, res: Response) => {
+  console.log('Health check hit from:', req.headers.origin);
   res.json({ 
     status: 'OK', 
     timestamp: new Date().toISOString(),
-    emailConfigured: !!(process.env.EMAIL_USER && process.env.EMAIL_PASS)
+    emailConfigured: !!(process.env.EMAIL_USER && process.env.EMAIL_PASS),
+    origin: req.headers.origin || 'No origin header'
   });
 });
 
 // Test email endpoint (for debugging)
 app.get('/test-email', async (req: Request, res: Response) => {
+  console.log('Test email endpoint hit from:', req.headers.origin);
   try {
     const transporter = getTransporter();
     await transporter.verify();
@@ -630,4 +714,5 @@ app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
   console.log(`📡 Health check: http://localhost:${PORT}/health`);
   console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
+  console.log(`🔗 Allowed origins:`, allowedOrigins);
 });
