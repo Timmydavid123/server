@@ -50,97 +50,25 @@ const getTransporter = () => {
   return nodemailer.createTransport(config);
 };
 
-// Build allowed origins
+// ========== DIRECT CORS FIX ==========
 const allowedOrigins = [
   "http://localhost:5173",
-  "http://localhost:5174", // Add this for development
+  "http://localhost:5174",
   "https://adisaolashile.com",
   "https://www.adisaolashile.com",
-  process.env.FRONTEND_URL, 
+  process.env.FRONTEND_URL,
 ].filter(Boolean) as string[];
 
-console.log('Allowed origins:', allowedOrigins);
+// Remove ALL your current CORS middleware and replace with just these 2 lines:
+app.use(cors({
+  origin: allowedOrigins,
+  credentials: false
+}));
 
-// ========== FIXED CORS CONFIGURATION ==========
-const corsOptions: CorsOptions = {
-  origin: (origin, callback) => {
-    // Allow requests with no origin (like mobile apps, curl, postman)
-    if (!origin) {
-      console.log('No origin - allowing request');
-      return callback(null, true);
-    }
-    
-    // Check if the origin is in the allowed list
-    if (allowedOrigins.indexOf(origin) !== -1) {
-      console.log(`CORS allowed for origin: ${origin}`);
-      return callback(null, true);
-    }
-    
-    // Check for subdomains or similar domains
-    if (origin.endsWith('.adisaolashile.com')) {
-      console.log(`CORS allowed for subdomain: ${origin}`);
-      return callback(null, true);
-    }
-    
-    console.log(`CORS blocked: ${origin}`);
-    return callback(new Error('Not allowed by CORS'));
-  },
-  credentials: false,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
-  allowedHeaders: [
-    'Content-Type', 
-    'Authorization', 
-    'X-Requested-With',
-    'Accept',
-    'Origin',
-    'Access-Control-Request-Method',
-    'Access-Control-Request-Headers'
-  ],
-  exposedHeaders: [
-    'Access-Control-Allow-Origin',
-    'Access-Control-Allow-Credentials'
-  ],
-  maxAge: 86400, // 24 hours
-};
+app.options('*', cors()); // Handle preflight
+// ========== END CORS FIX ==========
 
-// Apply CORS middleware BEFORE any routes
-app.use(cors(corsOptions));
-
-// Handle preflight requests explicitly
-app.options('*', (req, res) => {
-  const origin = req.headers.origin;
-  
-  // Set CORS headers
-  if (origin && allowedOrigins.includes(origin)) {
-    res.setHeader('Access-Control-Allow-Origin', origin);
-  }
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin');
-  res.setHeader('Access-Control-Max-Age', '86400');
-  
-  console.log(`Preflight request handled for: ${origin || 'no origin'}`);
-  res.status(204).end(); // No content for OPTIONS
-});
-
-// Add manual CORS headers for all responses
-app.use((req, res, next) => {
-  const origin = req.headers.origin;
-  
-  if (origin && allowedOrigins.includes(origin)) {
-    res.setHeader('Access-Control-Allow-Origin', origin);
-  }
-  res.setHeader('Access-Control-Allow-Credentials', 'false');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin');
-  
-  // For preflight requests, respond immediately
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end();
-  }
-  
-  next();
-});
-
+// Keep everything else the same
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
