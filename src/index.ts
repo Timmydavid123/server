@@ -65,7 +65,7 @@ app.use(cors({
   credentials: false
 }));
 
-app.options('/*', cors())
+app.options(/.*/, cors())
 // ========== END CORS FIX ==========
 
 // Keep everything else the same
