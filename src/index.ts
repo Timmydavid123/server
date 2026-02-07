@@ -446,15 +446,36 @@ app.get('/verify-payment', async (req: Request, res: Response) => {
 
 app.post('/send-receipt', async (req: Request<object, object, SendReceiptRequest>, res: Response) => {
   console.log('Send receipt endpoint hit from:', req.headers.origin);
+  console.log('Request body:', JSON.stringify(req.body, null, 2));
+  
   try {
     const { customerEmail, orderId, items, total, customerName, shippingAddress } = req.body;
 
+    console.log('Email user exists:', !!process.env.EMAIL_USER);
+    console.log('Email pass exists:', !!process.env.EMAIL_PASS);
+
     if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
-      throw new Error('Email configuration is missing');
+      console.error('Email configuration is missing');
+      return res.status(500).json({ 
+        error: 'Email configuration is missing',
+        details: 'EMAIL_USER or EMAIL_PASS environment variables not set'
+      });
     }
 
     // Create transporter
     const transporter = getTransporter();
+    
+    // Verify SMTP connection first
+    try {
+      await transporter.verify();
+      console.log('SMTP connection verified successfully');
+    } catch (verifyError) {
+      console.error('SMTP connection failed:', verifyError);
+      return res.status(500).json({ 
+        error: 'SMTP connection failed',
+        details: verifyError instanceof Error ? verifyError.message : 'Unknown SMTP error'
+      });
+    }
 
     // Email to customer
     const customerMailOptions = {
@@ -523,54 +544,88 @@ app.post('/send-receipt', async (req: Request<object, object, SendReceiptRequest
         </body>
         </html>
       `,
+      text: `
+ORDER CONFIRMATION - ${orderId}
+===============================
+
+Dear ${customerName},
+
+Thank you for your order from Adisa Olashile Art!
+
+Order ID: ${orderId}
+Order Date: ${new Date().toLocaleDateString()}
+
+ORDER SUMMARY:
+${items.map(item => `${item.title} (Qty: ${item.quantity}) - $${item.price.toFixed(2)} each = $${(item.price * item.quantity).toFixed(2)}`).join('\n')}
+
+Total: $${total.toFixed(2)}
+
+SHIPPING ADDRESS:
+${shippingAddress}
+
+Your artwork will be carefully packaged and shipped within 2-3 business days. You will receive a tracking number once your order is dispatched.
+
+If you have any questions about your order, please contact us at:
+📧 info@adisaolashile.com | 📞 +44 7887 851220
+
+Thank you for supporting African art!
+      `
     };
 
-    // Email to admin
-    const adminMailOptions = {
-      from: `"Adisa Olashile Orders" <${process.env.EMAIL_USER}>`,
-      to: process.env.ADMIN_EMAIL || process.env.EMAIL_USER,
-      subject: `🛍️ New Order Received - ${orderId}`,
-      html: `
-        <h2>🛍️ New Order Received!</h2>
-        <div style="background: #e3f2fd; padding: 20px; border-radius: 5px; margin: 15px 0;">
-          <p><strong>Order ID:</strong> ${orderId}</p>
-          <p><strong>Customer:</strong> ${customerName} (${customerEmail})</p>
-          <p><strong>Total:</strong> $${total.toFixed(2)}</p>
-          <p><strong>Order Date:</strong> ${new Date().toLocaleString()}</p>
-        </div>
-        
-        <h3>Shipping Address:</h3>
-        <div style="background: #f5f5f5; padding: 15px; border-radius: 3px;">
-          <p>${shippingAddress.replace(/,/g, '<br>')}</p>
-        </div>
-        
-        <h3>Order Items (${items.length}):</h3>
-        <ul>
-          ${items.map((item) => `<li>${item.title} - $${item.price.toFixed(2)} x ${item.quantity} = $${(item.price * item.quantity).toFixed(2)}</li>`).join('')}
-        </ul>
-        
-        <div style="margin-top: 25px; padding: 15px; background: #fff3cd; border-left: 4px solid #ffc107;">
-          <p><strong>⚠️ Action Required:</strong> Process this order within 24 hours.</p>
-        </div>
-      `,
-    };
+    // Send customer email
+    const customerInfo = await transporter.sendMail(customerMailOptions);
+    console.log('Order confirmation sent to customer:', customerEmail, 'Message ID:', customerInfo.messageId);
 
-    // Send both emails
-    await transporter.sendMail(customerMailOptions);
-    console.log('Order confirmation sent to customer:', customerEmail);
-    
-    await transporter.sendMail(adminMailOptions);
-    console.log('Order notification sent to admin:', process.env.ADMIN_EMAIL);
+    // Email to admin (optional - can be removed if not needed)
+    const adminEmail = process.env.ADMIN_EMAIL || process.env.EMAIL_USER;
+    if (adminEmail) {
+      const adminMailOptions = {
+        from: `"Adisa Olashile Orders" <${process.env.EMAIL_USER}>`,
+        to: adminEmail,
+        subject: `🛍️ New Order Received - ${orderId}`,
+        html: `
+          <h2>🛍️ New Order Received!</h2>
+          <div style="background: #e3f2fd; padding: 20px; border-radius: 5px; margin: 15px 0;">
+            <p><strong>Order ID:</strong> ${orderId}</p>
+            <p><strong>Customer:</strong> ${customerName} (${customerEmail})</p>
+            <p><strong>Total:</strong> $${total.toFixed(2)}</p>
+            <p><strong>Order Date:</strong> ${new Date().toLocaleString()}</p>
+          </div>
+          
+          <h3>Shipping Address:</h3>
+          <div style="background: #f5f5f5; padding: 15px; border-radius: 3px;">
+            <p>${shippingAddress.replace(/,/g, '<br>')}</p>
+          </div>
+          
+          <h3>Order Items (${items.length}):</h3>
+          <ul>
+            ${items.map((item) => `<li>${item.title} - $${item.price.toFixed(2)} x ${item.quantity} = $${(item.price * item.quantity).toFixed(2)}</li>`).join('')}
+          </ul>
+          
+          <div style="margin-top: 25px; padding: 15px; background: #fff3cd; border-left: 4px solid #ffc107;">
+            <p><strong>⚠️ Action Required:</strong> Process this order within 24 hours.</p>
+          </div>
+        `,
+      };
+
+      const adminInfo = await transporter.sendMail(adminMailOptions);
+      console.log('Order notification sent to admin:', adminEmail, 'Message ID:', adminInfo.messageId);
+    }
 
     res.json({ 
       success: true, 
       message: 'Receipts sent successfully',
-      orderId: orderId
+      orderId: orderId,
+      customerMessageId: customerInfo.messageId
     });
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
     console.error('Email sending error:', error);
-    res.status(500).json({ error: errorMessage });
+    res.status(500).json({ 
+      error: 'Failed to send receipt',
+      details: errorMessage,
+      timestamp: new Date().toISOString()
+    });
   }
 });
 
