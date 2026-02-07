@@ -4,15 +4,22 @@ import Stripe from 'stripe';
 import nodemailer from 'nodemailer';
 import dotenv from 'dotenv';
 import path from 'path';
+import { fileURLToPath } from 'url';
+
+// ES Module fix for __dirname
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 dotenv.config();
+
 const app = express();
-const port = process.env.PORT || 4242;
+const PORT = process.env.PORT || 10000;
 
 // Initialize Stripe with proper error handling
 const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
 if (!stripeSecretKey) {
-  throw new Error('STRIPE_SECRET_KEY environment variable is required');
+  console.error('STRIPE_SECRET_KEY environment variable is required');
+  process.exit(1);
 }
 
 const stripe = new Stripe(stripeSecretKey);
@@ -57,6 +64,7 @@ const corsOptions: CorsOptions = {
   origin: (origin, cb) => {
     if (!origin) return cb(null, true);
     if (allowedOrigins.has(origin)) return cb(null, true);
+    console.log(`CORS blocked: ${origin}`);
     return cb(new Error(`CORS: ${origin} not allowed`));
   },
   credentials: false,
@@ -66,10 +74,10 @@ const corsOptions: CorsOptions = {
 app.use(cors(corsOptions));
 
 // IMPORTANT: handle preflight ONCE (no duplicates)
-app.options(/.*/, cors(corsOptions));
+app.options('*', cors(corsOptions));
 
 app.use(express.json());
-
+app.use(express.urlencoded({ extended: true }));
 
 // Define proper TypeScript interfaces
 interface CartItem {
@@ -610,10 +618,16 @@ app.get('/test-email', async (req: Request, res: Response) => {
 
 // Only serve static files in production
 if (process.env.NODE_ENV === 'production') {
-  const __dirname = path.resolve();
   app.use(express.static(path.join(__dirname, 'dist')));
   
-  app.get(/.*/, (req, res) => {
-  res.sendFile(path.join(__dirname, 'dist', 'index.html'));
-});
+  app.get('*', (req, res) => {
+    res.sendFile(path.join(__dirname, 'dist', 'index.html'));
+  });
 }
+
+// Start server
+app.listen(PORT, () => {
+  console.log(`🚀 Server running on port ${PORT}`);
+  console.log(`📡 Health check: http://localhost:${PORT}/health`);
+  console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
+});
