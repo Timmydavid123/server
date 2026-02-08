@@ -576,7 +576,7 @@ Thank you for supporting African art!
     const adminEmail = process.env.ADMIN_EMAIL || process.env.EMAIL_USER;
     if (adminEmail) {
       const adminMailOptions = {
-        from: `"Adisa Olashile Orders" <${process.env.EMAIL_USER}>`,
+        from: `"${process.env.FROM_NAME}" <${process.env.FROM_EMAIL}>`,
         to: adminEmail,
         subject: `🛍️ New Order Received - ${orderId}`,
         html: `
