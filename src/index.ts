@@ -27,17 +27,13 @@ const stripe = new Stripe(stripeSecretKey);
 // CPanel email transporter configuration
 const getTransporter = () => {
   const config = {
-    host: process.env.SMTP_HOST || 'adisaolashile.com',
-    port: parseInt(process.env.SMTP_PORT || '465'),
+    host: process.env.SMTP_HOST || 'mail-eu.smtp2go.com',
+    port: parseInt(process.env.SMTP_PORT || '2525'),
     secure: process.env.SMTP_SECURE === 'true', // Use SSL for port 465
     auth: {
       user: process.env.EMAIL_USER,
       pass: process.env.EMAIL_PASS,
     },
-    tls: {
-      // Do not fail on invalid certificates
-      rejectUnauthorized: false
-    }
   };
 
   console.log('SMTP Config:', {
@@ -167,7 +163,7 @@ app.post('/api/contact', async (req: Request<object, object, ContactFormRequest>
 
     // Email to admin
     const adminMailOptions = {
-      from: `"Adisa Olashile Contact Form" <${process.env.EMAIL_USER}>`,
+      from: `"${process.env.FROM_NAME}" <${process.env.FROM_EMAIL}>`,
       to: adminEmail,
       subject: `New Contact Form: ${subject}`,
       replyTo: email,
@@ -232,7 +228,7 @@ ACTION REQUIRED: Reply directly to this email to respond to ${name}.
 
     // Email to user (confirmation)
     const userMailOptions = {
-      from: `"Adisa Olashile" <${process.env.EMAIL_USER}>`,
+      from: `"${process.env.FROM_NAME}" <${process.env.FROM_EMAIL}>`,
       to: email,
       subject: 'Thank You for Contacting Adisa Olashile!',
       html: `
@@ -479,7 +475,7 @@ app.post('/send-receipt', async (req: Request<object, object, SendReceiptRequest
 
     // Email to customer
     const customerMailOptions = {
-      from: `"Adisa Olashile Art" <${process.env.EMAIL_USER}>`,
+      from: `"${process.env.FROM_NAME}" <${process.env.FROM_EMAIL}>`,
       to: customerEmail,
       subject: `Order Confirmation - ${orderId}`,
       html: `
